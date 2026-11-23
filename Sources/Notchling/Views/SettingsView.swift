@@ -334,7 +334,7 @@ private struct DataSettings: View {
             }
             Section("About") {
                 LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")
-                Link("Source code (MIT)", destination: URL(string: "https://github.com/")!)
+                Link("Source code (MIT)", destination: URL(string: "https://github.com/Arvind-puthucode/notchling")!)
             }
         }
         .formStyle(.grouped)

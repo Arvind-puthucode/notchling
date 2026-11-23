@@ -32,12 +32,14 @@ struct TaskRow: View {
                     Text(task.title)
                         .strikethrough(task.isDone, color: Tok.ink(0.4))
                         .foregroundStyle(task.isDone ? Tok.ink(0.38) : Tok.ink(0.95))
-                        .lineLimit(compact ? 2 : 1)
+                        .lineLimit(compact ? 3 : 1)
                         .onTapGesture(count: 2) { startEditing() }
                 }
                 if compact, let due = task.due {
                     Label(due.formatted(date: .omitted, time: .shortened), systemImage: "bell")
                         .nfont(10, .medium)
+                        .lineLimit(1)
+                        .fixedSize()
                         .foregroundStyle(due < Date() && !task.isDone ? Tok.danger : Tok.ink(0.5))
                 }
                 if !compact, !task.links.isEmpty {

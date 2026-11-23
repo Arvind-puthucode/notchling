@@ -58,8 +58,9 @@ final class CalendarService: ObservableObject {
     }
 
     private func merge() {
-        let enabled = Prefs.d.bool(forKey: Prefs.calendarEnabled)
-        events = enabled ? (appleEvents + externalEvents).sorted { $0.start < $1.start } : []
+        // The toggle covers Apple Calendar only; links and booking services have their own settings.
+        let apple = Prefs.d.bool(forKey: Prefs.calendarEnabled) ? appleEvents : []
+        events = (apple + externalEvents).sorted { $0.start < $1.start }
     }
 
     func refresh() {

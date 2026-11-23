@@ -2,6 +2,10 @@
 
 Tasks, notes, focus timers, calendar and clipboard clips in your Mac's notch. Free and open source (MIT).
 
+![Notchling](docs/images/notchling-hero.png)
+
+**[⬇ Download the latest DMG](https://github.com/Arvind-puthucode/notchling/releases/latest)** · macOS 14+ · Apple silicon & Intel
+
 Click the notch or press **⌥N**. Macs without a notch get one drawn at the top center of the screen.
 
 > Notchling is an independent, clean-room project. It is written from scratch from publicly described
@@ -28,9 +32,14 @@ Click the notch or press **⌥N**. Macs without a notch get one drawn at the top
 
 All data lives in one JSON file on your Mac: `~/Library/Application Support/Notchling/data.json`. No account. The network is used only for calendar links and booking services you add.
 
+![Features](docs/images/notchling-features.png)
+
 ## Install
 
-Download the DMG from Releases, open it, drag **Notchling** to Applications.
+Download the DMG from [Releases](https://github.com/Arvind-puthucode/notchling/releases/latest), open it, drag **Notchling** to Applications.
+
+The current DMG isn't notarized by Apple yet, so the first launch needs one extra step: right-click Notchling in Applications → **Open** → **Open**
+(or run `xattr -dr com.apple.quarantine /Applications/Notchling.app`).
 
 If you launch it straight from the disk image or Downloads, Notchling offers to move itself to Applications and relaunch.
 
