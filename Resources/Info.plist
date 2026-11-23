@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>Notchling</string>
+    <key>CFBundleDisplayName</key><string>Notchling</string>
+    <key>CFBundleIdentifier</key><string>dev.notchling.app</string>
+    <key>CFBundleExecutable</key><string>Notchling</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>__VERSION__</string>
+    <key>CFBundleVersion</key><string>__BUILD__</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSUIElement</key><true/>
+    <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Notchling shows your upcoming events and meeting links in the notch. It never creates, edits or deletes events.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Notchling watches your screenshot folder so new screenshots and recordings appear in Clips.</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key><string>dev.notchling.app</string>
+            <key>CFBundleURLSchemes</key><array><string>notchling</string></array>
+        </dict>
+    </array>
+    <key>NSHumanReadableCopyright</key><string>MIT License</string>
+</dict>
+</plist>
