@@ -36,6 +36,14 @@ final class TaskParserTests: XCTestCase {
         XCTAssertEqual(r.links, ["https://example.com/pr/1"])
     }
 
+    func testPossessiveDayIsPartOfTitleAndTimedPhraseWins() throws {
+        let now = Date()
+        let r = try XCTUnwrap(TaskParser.parse("Prep tomorrow's standup notes today at 7:30pm", now: now))
+        XCTAssertEqual(r.title, "Prep tomorrow's standup notes")
+        XCTAssertEqual(r.day, cal.startOfDay(for: now))
+        XCTAssertEqual(r.due.map { cal.component(.hour, from: $0) }, 19)
+    }
+
     func testEmpty() {
         XCTAssertNil(TaskParser.parse("   "))
     }

@@ -156,3 +156,95 @@ let grid = canvas(3200, 1800) { c, w, h in
 }
 try! grid.write(to: out.appendingPathComponent("notchling-features.png"))
 print("wrote", out.path)
+
+// MARK: 3. Claude + MCP use case (16:9), from a real `claude -p` run against notchling-mcp
+
+if FileManager.default.fileExists(atPath: src.appendingPathComponent("shot-mcp.png").path) {
+    let notch = shot("mcp")
+    let mono = { (size: CGFloat, w: NSFont.Weight) in NSFont.monospacedSystemFont(ofSize: size, weight: w) }
+
+    func block(_ s: NSAttributedString, in r: NSRect) { s.draw(with: r, options: [.usesLineFragmentOrigin]) }
+    func line(_ parts: [(String, NSColor, NSFont)]) -> NSAttributedString {
+        let a = NSMutableAttributedString()
+        let para = NSMutableParagraphStyle()
+        para.lineSpacing = 10
+        for (t, c, f) in parts { a.append(NSAttributedString(string: t, attributes: [.font: f, .foregroundColor: c, .paragraphStyle: para])) }
+        return a
+    }
+
+    let img = canvas(3200, 1800) { c, w, h in
+        background(c, w, h)
+        text("Tell Claude. It lands in your notch.", at: NSPoint(x: w / 2, y: h - 200), size: 104, weight: .heavy, color: .white)
+        text("Notchling ships a local MCP server for Claude Code, the Claude app and Cursor.", at: NSPoint(x: w / 2, y: h - 285),
+             size: 44, weight: .medium, color: NSColor.white.withAlphaComponent(0.6))
+
+        // Terminal card.
+        let term = NSRect(x: 130, y: 1380 - 830, width: 1500, height: 830)
+        c.saveGState()
+        c.setShadow(offset: CGSize(width: 0, height: -20), blur: 60, color: NSColor.black.withAlphaComponent(0.6).cgColor)
+        NSColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1).setFill()
+        NSBezierPath(roundedRect: term, xRadius: 28, yRadius: 28).fill()
+        c.restoreGState()
+        NSColor.white.withAlphaComponent(0.1).setStroke()
+        NSBezierPath(roundedRect: term.insetBy(dx: 1, dy: 1), xRadius: 27, yRadius: 27).stroke()
+        for (i, col) in [NSColor.systemRed, .systemYellow, .systemGreen].enumerated() {
+            col.withAlphaComponent(0.85).setFill()
+            NSBezierPath(ovalIn: NSRect(x: term.minX + 36 + CGFloat(i) * 40, y: term.maxY - 56, width: 24, height: 24)).fill()
+        }
+        text("claude", at: NSPoint(x: term.midX, y: term.maxY - 60), size: 28, weight: .semibold, color: NSColor.white.withAlphaComponent(0.4))
+
+        let dim = NSColor.white.withAlphaComponent(0.5), body = NSColor.white.withAlphaComponent(0.92)
+        let orange = accent, green = NSColor(red: 0.45, green: 0.85, blue: 0.55, alpha: 1)
+        let f = mono(29, .regular), fb = mono(29, .semibold)
+        var y = term.maxY - 110
+        func put(_ a: NSAttributedString, height: CGFloat) {
+            block(a, in: NSRect(x: term.minX + 50, y: y - height, width: term.width - 100, height: height))
+            y -= height + 22
+        }
+        put(line([("> ", orange, fb), ("Plan the rest of my launch day in Notchling. I still need to record a 30s demo video, write the launch tweet thread, reply to GitHub issues, and prep tomorrow's standup notes. Add them for today from 5pm, mark the tweet thread important, then start a 25-minute focus session.", body, f)]), height: 200)
+        let calls: [(String, String)] = [
+            ("add_task", "\"Record 30s demo video today at 5pm\""),
+            ("add_task", "\"Write launch tweet thread today at 5:30pm !\""),
+            ("add_task", "\"Reply to GitHub issues today at 6:30pm\""),
+            ("add_task", "\"Prep tomorrow's standup notes today at 7:30pm\""),
+            ("focus", "start · 25 min"),
+        ]
+        for (tool, arg) in calls {
+            put(line([("● ", green, fb), ("notchling.\(tool)", body, fb), ("  \(arg)", dim, f)]), height: 44)
+        }
+        y -= 14
+        y -= 6
+        put(line([("● ", orange, fb), ("Added 4 tasks for today: 5:00 demo video, 5:30 tweet thread (marked important), 6:30 GitHub issues, 7:30 standup notes. 25-minute focus timer is running.", body, f)]), height: 160)
+
+        // Arrow.
+        accent.setStroke()
+        let arrow = NSBezierPath()
+        arrow.lineWidth = 8
+        arrow.lineCapStyle = .round
+        arrow.move(to: NSPoint(x: 1680, y: 980))
+        arrow.line(to: NSPoint(x: 1790, y: 980))
+        arrow.stroke()
+        accent.setFill()
+        let head = NSBezierPath()
+        head.move(to: NSPoint(x: 1820, y: 980)); head.line(to: NSPoint(x: 1786, y: 1004)); head.line(to: NSPoint(x: 1786, y: 956)); head.close()
+        head.fill()
+
+        // The notch, on a screen.
+        let cx: CGFloat = 2470, top: CGFloat = 1380
+        let panelW: CGFloat = 1180
+        let panelH = panelW * CGFloat(notch.height) / CGFloat(notch.width)
+        screenEdge(c, w, top: top, width: 1320, height: panelH + 120, centerX: cx, menuBar: 34)
+        _ = place(notch, c, center: cx, top: top, width: panelW)
+
+        // Setup line.
+        let cmd = "claude mcp add notchling -- /Applications/Notchling.app/Contents/MacOS/notchling-mcp"
+        let cf = mono(30, .medium)
+        let cw = (cmd as NSString).size(withAttributes: [.font: cf]).width + 70
+        let r = NSRect(x: w / 2 - cw / 2, y: 260, width: cw, height: 76)
+        NSColor.white.withAlphaComponent(0.07).setFill()
+        NSBezierPath(roundedRect: r, xRadius: 38, yRadius: 38).fill()
+        NSAttributedString(string: cmd, attributes: [.font: cf, .foregroundColor: NSColor.white.withAlphaComponent(0.75)])
+            .draw(at: NSPoint(x: r.minX + 35, y: r.minY + 20))
+    }
+    try! img.write(to: out.appendingPathComponent("notchling-claude.png"))
+}

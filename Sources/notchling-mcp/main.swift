@@ -137,7 +137,12 @@ func call(_ name: String, _ args: [String: Any]) throws -> [String: Any] {
         case "status": break
         default: return text("unknown action \(action)", isError: true)
         }
-        if action != "status" { Thread.sleep(forTimeInterval: 0.6) }
+        if action != "status" {
+            // Give the app a moment to handle the URL (it may also be launching).
+            for _ in 0..<15 where (focusStatus()["active"] as? Bool ?? false) != (action != "stop") {
+                Thread.sleep(forTimeInterval: 0.2)
+            }
+        }
         return text(json(focusStatus()))
     case "get_note":
         let data = try file.load()
@@ -184,7 +189,12 @@ func openURL(_ url: String) throws {
 
 /// Timer state the app mirrors into its defaults.
 func focusStatus() -> [String: Any] {
-    guard let s = UserDefaults(suiteName: "dev.notchling.app")?.dictionary(forKey: "focus.state"),
+    // Bundled inside Notchling.app this process shares the app's bundle id, and macOS refuses a
+    // suite named after your own id, so fall back to .standard (which is then the app's domain).
+    let id = "dev.notchling.app" as CFString
+    CFPreferencesAppSynchronize(id) // pick up writes the app made after we started
+    let defaults = UserDefaults(suiteName: "dev.notchling.app") ?? .standard
+    guard let s = defaults.dictionary(forKey: "focus.state"),
           s["active"] as? Bool == true else { return ["active": false] }
     let running = s["running"] as? Bool ?? false
     var elapsed = s["elapsed"] as? Double ?? 0

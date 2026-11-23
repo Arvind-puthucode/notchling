@@ -39,17 +39,25 @@ public enum TaskParser {
         let detector = try! NSDataDetector(types: types.rawValue)
         let ns = text as NSString
         var removals: [NSRange] = []
+        var dates: [(range: NSRange, date: Date, hasTime: Bool)] = []
         for match in detector.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             if match.resultType == .link, let url = match.url {
                 links.append(url.absoluteString)
                 removals.append(match.range)
-            } else if match.resultType == .date, day == nil, let date = match.date {
+            } else if match.resultType == .date, let date = match.date {
+                // "tomorrow's standup" names a thing, not when the task happens.
+                let after = NSMaxRange(match.range)
+                if after + 1 < ns.length, ["'s", "’s"].contains(ns.substring(with: NSRange(location: after, length: 2))) { continue }
                 let phrase = ns.substring(with: match.range)
                 let hasTime = timeWords.firstMatch(in: phrase, range: NSRange(location: 0, length: (phrase as NSString).length)) != nil
-                day = calendar.startOfDay(for: date)
-                due = hasTime ? date : nil
-                removals.append(match.range)
+                dates.append((match.range, date, hasTime))
             }
+        }
+        // With several date phrases, the one that names a time wins ("prep Monday deck today at 5pm").
+        if let pick = dates.first(where: \.hasTime) ?? dates.first {
+            day = calendar.startOfDay(for: pick.date)
+            due = pick.hasTime ? pick.date : nil
+            removals.append(pick.range)
         }
         let mutable = NSMutableString(string: text)
         for range in removals.sorted(by: { $0.location > $1.location }) {

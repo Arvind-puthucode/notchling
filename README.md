@@ -69,6 +69,8 @@ Set `NOTCHLING_DATA=/path/to/file.json` to point the app or the MCP server at a 
 
 ## Connect an AI agent
 
+![Claude planning a day through Notchling's MCP server](docs/images/notchling-claude.png)
+
 Claude Code:
 
 ```sh
