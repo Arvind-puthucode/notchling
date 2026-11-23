@@ -37,6 +37,8 @@ All data lives in one JSON file on your Mac: `~/Library/Application Support/Notc
 ## Character packs
 
 A character can live in your notch: it greets you on Today, cheers when you finish tasks, and delivers reminders in its own voice.
+![Popeye in the notch](docs/images/popeye-hero.png)
+
 Pick one in **Settings › Appearance › Character**. Built in:
 
 - **Popeye (1929)**: eight poses cut from E. C. Segar's 1929 *Thimble Theatre* strips (Jan 17, Feb 14, Oct 16, Nov 13),
