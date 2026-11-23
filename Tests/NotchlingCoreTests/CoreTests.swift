@@ -184,3 +184,105 @@ final class MeetingLinkTests: XCTestCase {
         XCTAssertEqual(MeetingLink.find(in: ["https://meet.google.com/abc-defg-hij"])?.host, "meet.google.com")
     }
 }
+
+final class ReminderSyncTests: XCTestCase {
+    let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func testCreatesUnlinkedOpenTasksAndImportsUnknownReminders() {
+        var d = PlannerData()
+        d.tasks = [TaskItem(title: "local", createdAt: t0), TaskItem(title: "done", completedAt: t0, createdAt: t0)]
+        let r = RemoteReminder(id: "R1", title: "from phone", day: nil, due: nil, completedAt: nil, modified: t0)
+        let ops = ReminderSync.reconcile(&d, remote: [r])
+        XCTAssertEqual(ops.create.map(\.title), ["local"])
+        XCTAssertEqual(d.tasks.map(\.title), ["local", "done", "from phone"])
+        XCTAssertEqual(d.tasks.last?.reminderID, "R1")
+    }
+
+    func testNewerSideWins() {
+        var d = PlannerData()
+        d.tasks = [
+            TaskItem(title: "old local", createdAt: t0, modifiedAt: t0, reminderID: "A"),
+            TaskItem(title: "new local", createdAt: t0, modifiedAt: t0.addingTimeInterval(100), reminderID: "B"),
+        ]
+        let remote = [
+            RemoteReminder(id: "A", title: "edited on phone", day: nil, due: nil, completedAt: t0.addingTimeInterval(50), modified: t0.addingTimeInterval(50)),
+            RemoteReminder(id: "B", title: "stale", day: nil, due: nil, completedAt: nil, modified: t0),
+        ]
+        let ops = ReminderSync.reconcile(&d, remote: remote)
+        XCTAssertEqual(d.tasks[0].title, "edited on phone")
+        XCTAssertTrue(d.tasks[0].isDone)
+        XCTAssertEqual(ops.update.map(\.0), ["B"])
+        XCTAssertEqual(d.tasks[1].title, "new local")
+    }
+
+    func testDeletesBothWays() {
+        var d = PlannerData()
+        d.tasks = [TaskItem(title: "gone remotely", createdAt: t0, reminderID: "X"), TaskItem(title: "kill", createdAt: t0, reminderID: "Y")]
+        d.delete(d.tasks[1].id)
+        let ops = ReminderSync.reconcile(&d, remote: [RemoteReminder(id: "Y", title: "kill", day: nil, due: nil, completedAt: nil, modified: t0)])
+        XCTAssertTrue(d.tasks.isEmpty)
+        XCTAssertEqual(ops.delete, ["Y"])
+        XCTAssertNil(d.deletedReminderIDs)
+    }
+
+    func testEqualContentDoesNotPush() {
+        var d = PlannerData()
+        d.tasks = [TaskItem(title: "same", createdAt: t0, modifiedAt: t0.addingTimeInterval(60), reminderID: "S")]
+        let ops = ReminderSync.reconcile(&d, remote: [RemoteReminder(id: "S", title: "same", day: nil, due: nil, completedAt: nil, modified: t0)])
+        XCTAssertTrue(ops.update.isEmpty)
+    }
+}
+
+final class ICSTests: XCTestCase {
+    func testParsesUTCFoldedAndWeeklyRecurrenceWithExdate() throws {
+        let ics = """
+        BEGIN:VCALENDAR\r
+        BEGIN:VEVENT\r
+        UID:one\r
+        SUMMARY:Standup with a very long\r
+          title\r
+        DTSTART:20261123T040000Z\r
+        DTEND:20261123T041500Z\r
+        RRULE:FREQ=WEEKLY;BYDAY=MO,WE;COUNT=4\r
+        EXDATE:20261125T040000Z\r
+        LOCATION:https://meet.google.com/abc-defg-hij\r
+        BEGIN:VALARM\r
+        TRIGGER:-PT10M\r
+        END:VALARM\r
+        END:VEVENT\r
+        BEGIN:VEVENT\r
+        UID:two\r
+        SUMMARY:Holiday\r
+        DTSTART;VALUE=DATE:20261126\r
+        END:VEVENT\r
+        END:VCALENDAR\r
+        """
+        let from = Date(timeIntervalSince1970: 1_795_000_000) // 2026-11-18
+        let to = from.addingTimeInterval(30 * 86400)
+        let events = ICS.events(in: ics, from: from, to: to)
+        let standups = events.filter { $0.uid == "one" }
+        XCTAssertEqual(standups.first?.title, "Standup with a very long title")
+        // COUNT=4 -> Mon 23, Wed 25 (excluded), Mon 30, Wed 2 Dec.
+        XCTAssertEqual(standups.count, 3)
+        XCTAssertEqual(standups.first?.start, ISO8601DateFormatter().date(from: "2026-11-23T04:00:00Z"))
+        XCTAssertEqual(standups.first.map { $0.end.timeIntervalSince($0.start) }, 900)
+        let holiday = try XCTUnwrap(events.first { $0.uid == "two" })
+        XCTAssertTrue(holiday.isAllDay)
+        XCTAssertEqual(holiday.end.timeIntervalSince(holiday.start), 86400)
+    }
+
+    func testTZIDAndDuration() throws {
+        let ics = "BEGIN:VEVENT\nUID:x\nDTSTART;TZID=Asia/Kolkata:20261201T100000\nDURATION:PT1H30M\nSUMMARY:Call\\, sync\nEND:VEVENT"
+        let e = try XCTUnwrap(ICS.events(in: ics, from: .distantPast, to: .distantFuture).first)
+        XCTAssertEqual(e.start, ISO8601DateFormatter().date(from: "2026-12-01T04:30:00Z"))
+        XCTAssertEqual(e.end.timeIntervalSince(e.start), 5400)
+        XCTAssertEqual(e.title, "Call, sync")
+    }
+}
+
+final class SortTests: XCTestCase {
+    func testDoneLastAndByTitle() {
+        let a = TaskItem(title: "b"), b = TaskItem(title: "a"), c = TaskItem(title: "0", completedAt: Date())
+        XCTAssertEqual(TaskSort.title.sorted([c, a, b]).map(\.title), ["a", "b", "0"])
+    }
+}

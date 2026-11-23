@@ -15,21 +15,55 @@ extension PlannerData {
     public mutating func toggleDone(_ id: UUID, now: Date = Date()) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[i].completedAt = tasks[i].isDone ? nil : now
+        tasks[i].modifiedAt = now
     }
 
     public mutating func setDone(_ id: UUID, now: Date = Date()) -> Bool {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return false }
-        if tasks[i].completedAt == nil { tasks[i].completedAt = now }
+        if tasks[i].completedAt == nil {
+            tasks[i].completedAt = now
+            tasks[i].modifiedAt = now
+        }
         return true
     }
 
     public mutating func delete(_ id: UUID) {
-        tasks.removeAll { $0.id == id }
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        if let rid = tasks[i].reminderID { deletedReminderIDs = (deletedReminderIDs ?? []) + [rid] }
+        tasks.remove(at: i)
+    }
+
+    public mutating func rename(_ id: UUID, to title: String, now: Date = Date()) {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, let i = tasks.firstIndex(where: { $0.id == id }), tasks[i].title != t else { return }
+        tasks[i].title = t
+        tasks[i].modifiedAt = now
+    }
+
+    public mutating func toggleImportant(_ id: UUID, now: Date = Date()) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].important.toggle()
+        tasks[i].modifiedAt = now
+    }
+
+    public mutating func attach(_ links: [String], to id: UUID, now: Date = Date()) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        let new = links.filter { !tasks[i].links.contains($0) }
+        guard !new.isEmpty else { return }
+        tasks[i].links += new
+        tasks[i].modifiedAt = now
+    }
+
+    public mutating func detach(_ link: String, from id: UUID, now: Date = Date()) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].links.removeAll { $0 == link }
+        tasks[i].modifiedAt = now
     }
 
     /// Moves a task to a day (keeping its time of day when it has one) or to the Inbox.
-    public mutating func move(_ id: UUID, to day: Date?, calendar: Calendar = .current) {
+    public mutating func move(_ id: UUID, to day: Date?, calendar: Calendar = .current, now: Date = Date()) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].modifiedAt = now
         guard let day else {
             tasks[i].day = nil
             tasks[i].due = nil
@@ -53,6 +87,7 @@ extension PlannerData {
                 tasks[i].day = today
                 tasks[i].due = nil
                 tasks[i].reminded = false
+                tasks[i].modifiedAt = now
             }
         }
     }
@@ -94,6 +129,7 @@ extension PlannerData {
         tasks[i].due = due
         tasks[i].day = calendar.startOfDay(for: due)
         tasks[i].reminded = false
+        tasks[i].modifiedAt = now
     }
 
     // MARK: Notes
@@ -116,6 +152,32 @@ extension PlannerData {
         for t in tasks where !t.isDone {
             guard let day = t.day, day <= today else { continue }
             move(t.id, to: toTomorrow ? tomorrow : nil, calendar: calendar)
+        }
+    }
+}
+
+public enum TaskSort: String, CaseIterable, Identifiable, Sendable {
+    case smart, time, title, created
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .smart: return "Smart"
+        case .time: return "Time"
+        case .title: return "Title"
+        case .created: return "Newest"
+        }
+    }
+
+    /// Open tasks always stay above finished ones.
+    public func sorted(_ tasks: [TaskItem]) -> [TaskItem] {
+        tasks.sorted { a, b in
+            if a.isDone != b.isDone { return !a.isDone }
+            switch self {
+            case .smart: return PlannerData.order(a, b)
+            case .time: return (a.due ?? .distantFuture, a.createdAt) < (b.due ?? .distantFuture, b.createdAt)
+            case .title: return a.title.localizedStandardCompare(b.title) == .orderedAscending
+            case .created: return a.createdAt > b.createdAt
+            }
         }
     }
 }

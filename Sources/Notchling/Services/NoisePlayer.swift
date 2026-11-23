@@ -3,7 +3,7 @@ import AVFoundation
 /// Procedural background sounds. No audio files ship with the app.
 final class NoisePlayer {
     enum Sound: String, CaseIterable, Identifiable {
-        case off, brown, pink, white, ocean
+        case off, brown, pink, white, rain, ocean
         var id: String { rawValue }
         var label: String { rawValue.capitalized }
     }
@@ -55,6 +55,8 @@ private final class NoiseState {
     private var brown: Float = 0
     private var b0: Float = 0, b1: Float = 0, b2: Float = 0, b3: Float = 0, b4: Float = 0, b5: Float = 0, b6: Float = 0
     private var phase: Double = 0
+    private var low: Float = 0
+    private var drop: Float = 0
 
     func next() -> Float {
         let white = Float.random(in: -1...1)
@@ -74,6 +76,13 @@ private final class NoiseState {
             let pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362
             b6 = white * 0.115926
             return pink * 0.08
+        case .rain:
+            // High-passed hiss for the downpour plus sparse decaying droplets.
+            low += 0.08 * (white - low)
+            let hiss = (white - low) * 0.16
+            if Float.random(in: 0...1) < 0.0006 { drop = Float.random(in: 0.2...0.6) }
+            drop *= 0.992
+            return hiss + drop * Float.random(in: -1...1) * 0.5 + nextBrown(white) * 0.35
         case .ocean:
             // Brown noise swelling on a slow ~9 s wave.
             phase += 1 / sampleRate

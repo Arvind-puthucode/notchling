@@ -33,14 +33,17 @@ extension NSScreen {
             return (CGSize(width: frame.width - left.width - right.width, height: safeAreaInsets.top), true)
         }
         let menuBar = frame.maxY - visibleFrame.maxY
-        return (CGSize(width: 190, height: menuBar > 0 ? menuBar : 25), false)
+        return (CGSize(width: 190, height: menuBar > 4 ? menuBar : 25), false)
     }
+
+    /// A full-screen app (or auto-hide) has hidden the menu bar on this display.
+    var menuBarHidden: Bool { visibleFrame.maxY >= frame.maxY - 1 }
 }
 
 @MainActor
 final class NotchWindowController {
     static let sidePill: CGFloat = 64 // extra width each side when a timer shows while closed
-    private static let margin: CGFloat = 24
+    private static let margin: CGFloat = 30
 
     private let model: AppModel
     private let panel = NotchPanel()
@@ -49,20 +52,18 @@ final class NotchWindowController {
     private var bag = Set<AnyCancellable>()
     private var hoverWork: DispatchWorkItem?
     private var previousApp: NSRunningApplication?
+    private lazy var workspaceWindow = WorkspaceWindowController(model: model)
 
     init(model: AppModel) {
         self.model = model
         screen = NSScreen.screens.first(where: \.isBuiltin) ?? NSScreen.main ?? NSScreen.screens[0]
 
-        let host = NSHostingView(rootView: NotchRootView()
-            .environmentObject(model)
-            .environmentObject(model.store)
-            .environmentObject(model.focus)
-            .environmentObject(model.calendar)
-            .environmentObject(model.clips))
+        let host = NSHostingView(rootView: NotchRootView().withServices(model))
         host.sizingOptions = []
         panel.contentView = host
 
+        model.showWindow = { [weak self] in self?.workspaceWindow.show() }
+        screen = pinnedScreen() ?? screen
         layout()
         panel.ignoresMouseEvents = true
         panel.orderFrontRegardless()
@@ -71,10 +72,14 @@ final class NotchWindowController {
             self?.apply(open: open)
         }.store(in: &bag)
 
-        NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
+        let nc = NotificationCenter.default
+        nc.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .sink { [weak self] _ in self?.screensChanged() }.store(in: &bag)
-        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+        nc.publisher(for: UserDefaults.didChangeNotification)
             .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.prefsChanged() }.store(in: &bag)
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.activeSpaceDidChangeNotification)
+            .delay(for: .milliseconds(400), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.layout() }.store(in: &bag)
 
         installMonitors()
@@ -82,7 +87,7 @@ final class NotchWindowController {
 
     // MARK: Geometry
 
-    private var expandedSize: CGSize {
+    private var maxOpenSize: CGSize {
         CGSize(width: Prefs.d.double(forKey: Prefs.width), height: Prefs.d.double(forKey: Prefs.height))
     }
 
@@ -90,8 +95,10 @@ final class NotchWindowController {
         let info = screen.notchInfo
         if model.notchSize != info.size { model.notchSize = info.size }
         if model.screenHasHardwareNotch != info.hardware { model.screenHasHardwareNotch = info.hardware }
-        let size = expandedSize
-        let w = max(size.width, info.size.width + 2 * Self.sidePill) + 2 * Self.margin
+        let hidden = !info.hardware && screen.menuBarHidden
+        if model.menuBarHidden != hidden { model.menuBarHidden = hidden }
+        let size = maxOpenSize
+        let w = max(size.width, 520, info.size.width + 2 * Self.sidePill) + 2 * Self.margin
         let h = size.height + Self.margin
         let frame = NSRect(x: screen.frame.midX - w / 2, y: screen.frame.maxY - h, width: w, height: h)
         if panel.frame != frame { panel.setFrame(frame, display: true) }
@@ -102,15 +109,37 @@ final class NotchWindowController {
         let info = s.notchInfo
         let extra = model.focus.clock.isActive ? Self.sidePill : 0
         let w = info.size.width + 2 * extra
-        // A little taller than the notch so the very top pixel row is easy to hit.
         return NSRect(x: s.frame.midX - w / 2, y: s.frame.maxY - info.size.height - 4, width: w, height: info.size.height + 4)
     }
 
+    /// Visible area of the open notch, in global coordinates.
+    private var openContentRect: NSRect {
+        let size = model.openSize
+        return NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height, width: size.width, height: size.height)
+    }
+
+    private func prefsChanged() {
+        if let pinned = pinnedScreen(), pinned != screen { screen = pinned }
+        layout()
+    }
+
     private func screensChanged() {
-        if !NSScreen.screens.contains(screen) {
+        if let pinned = pinnedScreen() {
+            screen = pinned
+        } else if !NSScreen.screens.contains(screen) {
             screen = NSScreen.screens.first(where: \.isBuiltin) ?? NSScreen.main ?? NSScreen.screens[0]
         }
         layout()
+    }
+
+    /// The display chosen under Settings › Show on, or nil to follow the pointer.
+    private func pinnedScreen() -> NSScreen? {
+        let pin = Prefs.d.string(forKey: Prefs.displayPin) ?? "pointer"
+        switch pin {
+        case "pointer": return nil
+        case "builtin": return NSScreen.screens.first(where: \.isBuiltin) ?? NSScreen.main
+        default: return NSScreen.screens.first { String($0.displayID) == pin }
+        }
     }
 
     private func moveTo(_ s: NSScreen) {
@@ -124,15 +153,16 @@ final class NotchWindowController {
         return NSScreen.screens.first { NSMouseInRect(p, $0.frame, false) }
     }
 
-    /// Screens where the closed notch is clickable.
+    /// Screens whose closed notch responds to the pointer.
     private var activeScreens: [NSScreen] {
-        Prefs.d.bool(forKey: Prefs.followPointer) ? NSScreen.screens : [screen]
+        if let pinned = pinnedScreen() { return [pinned] }
+        return NSScreen.screens.filter { $0.notchInfo.hardware || !$0.menuBarHidden }
     }
 
     // MARK: Open / close
 
     func toggleFromHotKey() {
-        if !model.isOpen, Prefs.d.bool(forKey: Prefs.followPointer), let s = screenUnderPointer() { moveTo(s) }
+        if !model.isOpen, pinnedScreen() == nil, let s = screenUnderPointer() { moveTo(s) }
         model.toggle()
     }
 
@@ -160,7 +190,7 @@ final class NotchWindowController {
             MainActor.assumeIsolated { self?.globalMove() }
         }) { monitors.append(m) }
         if let m = NSEvent.addLocalMonitorForEvents(matching: [.keyDown], handler: { [weak self] event in
-            guard event.keyCode == 53 else { return event } // Esc
+            guard event.keyCode == 53, self?.panel.isKeyWindow == true else { return event } // Esc
             MainActor.assumeIsolated { self?.model.close() }
             return nil
         }) { monitors.append(m) }
@@ -175,20 +205,24 @@ final class NotchWindowController {
         }
         if let s = activeScreens.first(where: { NSMouseInRect(p, closedHitRect(on: $0), false) }) {
             moveTo(s)
+            model.hoveringClosedNotch = false
             model.open()
         }
     }
 
-    /// Visible area of the open notch, in global coordinates.
-    private var openContentRect: NSRect {
-        let size = expandedSize
-        return NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height, width: size.width, height: size.height)
-    }
-
     private func globalMove() {
-        guard Prefs.d.bool(forKey: Prefs.hoverToOpen), !model.isOpen else { return }
+        guard !model.isOpen else {
+            if model.hoveringClosedNotch { model.hoveringClosedNotch = false }
+            return
+        }
         let p = NSEvent.mouseLocation
-        guard let s = activeScreens.first(where: { NSMouseInRect(p, closedHitRect(on: $0), false) }) else {
+        let hit = activeScreens.first(where: { NSMouseInRect(p, closedHitRect(on: $0), false) })
+        if (hit != nil && hit == screen) != model.hoveringClosedNotch {
+            model.hoveringClosedNotch = hit != nil && hit == screen
+            if model.hoveringClosedNotch { model.haptic() }
+        }
+        guard Prefs.d.bool(forKey: Prefs.hoverToOpen) else { return }
+        guard let s = hit else {
             hoverWork?.cancel()
             hoverWork = nil
             return
@@ -202,6 +236,62 @@ final class NotchWindowController {
             self.model.open()
         }
         hoverWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
+}
+
+/// Window mode: the same workspace in a normal resizable window.
+@MainActor
+final class WorkspaceWindowController {
+    private let model: AppModel
+    private var window: NSWindow?
+
+    init(model: AppModel) { self.model = model }
+
+    func show() {
+        if window == nil {
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 480),
+                             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                             backing: .buffered, defer: false)
+            w.titlebarAppearsTransparent = true
+            w.titleVisibility = .hidden
+            w.isReleasedWhenClosed = false
+            w.minSize = NSSize(width: 620, height: 380)
+            w.contentView = NSHostingView(rootView: WorkspaceWindowView().withServices(model))
+            w.center()
+            w.setFrameAutosaveName("NotchlingWorkspace")
+            window = w
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
+    }
+}
+
+private struct WorkspaceWindowView: View {
+    @AppStorage(Prefs.appearance) private var appearance = "dark"
+    @AppStorage(Prefs.textScale) private var textScale = 1.0
+
+    var body: some View {
+        ExpandedView(inNotch: false)
+            .padding(.horizontal, 16)
+            .padding(.top, 30)
+            .padding(.bottom, 16)
+            .background(NotchBackground.color(light: appearance == "light"))
+            .environment(\.colorScheme, appearance == "light" ? .light : .dark)
+            .environment(\.textScale, textScale)
+    }
+}
+
+extension View {
+    /// Injects every service the workspace views read.
+    @MainActor func withServices(_ model: AppModel) -> some View {
+        environmentObject(model)
+            .environmentObject(model.store)
+            .environmentObject(model.focus)
+            .environmentObject(model.calendar)
+            .environmentObject(model.clips)
+            .environmentObject(model.speech)
+            .environmentObject(model.external)
+            .environmentObject(model.reminders)
     }
 }

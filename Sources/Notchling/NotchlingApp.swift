@@ -1,4 +1,5 @@
 import AppKit
+import CoreSpotlight
 import NotchlingCore
 import SwiftUI
 
@@ -30,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        AppMover.offerIfNeeded()
         let controller = NotchWindowController(model: model)
         notch = controller
         hotKey = HotKey { [weak controller] in
@@ -37,7 +39,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// notchling://open[/<tab>], notchling://close, notchling://add?text=…, notchling://focus?minutes=25
+    /// A task picked in Spotlight.
+    func application(_ application: NSApplication, continue userActivity: NSUserActivity,
+                     restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
+        guard userActivity.activityType == CSSearchableItemActionType else { return false }
+        model.open(.today)
+        return true
+    }
+
+    /// notchling://open[/<tab>], notchling://close, notchling://add?text=…,
+    /// notchling://focus?minutes=25[&mode=stopwatch], notchling://focus/stop|pause|resume
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls where url.scheme == "notchling" {
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -48,7 +59,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "add":
                 if let text = param("text") { model.store.mutate { $0.addTask(parsing: text, defaultDay: Date()) } }
             case "focus":
-                model.focus.start(.countdown, minutes: Int(param("minutes") ?? "") ?? 25)
+                switch url.lastPathComponent {
+                case "stop": model.focus.stop()
+                case "pause": model.focus.pause()
+                case "resume": model.focus.resume()
+                default:
+                    let mode: FocusClock.Mode = param("mode") == "stopwatch" ? .stopwatch : .countdown
+                    model.focus.start(mode, minutes: Int(param("minutes") ?? "") ?? 25)
+                }
             default: break
             }
         }
@@ -63,6 +81,7 @@ private struct MenuContent: View {
     var body: some View {
         Button("Open Notchling") { model.open() }
             .keyboardShortcut("n", modifiers: .option)
+        Button("Open as Window") { model.showWindow?() }
         Divider()
         if focus.clock.isActive {
             Text("Focus · \(focus.displayText)")

@@ -10,16 +10,21 @@ struct WeekView: View {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         let days = (0..<7).map { cal.date(byAdding: .day, value: $0, to: today)! }
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 8) {
-                Column(title: "Inbox", subtitle: "\(store.data.inbox.count)", day: nil, tasks: store.data.inbox, events: [])
-                ForEach(days, id: \.self) { day in
-                    Column(
-                        title: cal.isDateInToday(day) ? "Today" : day.formatted(.dateTime.weekday(.abbreviated)),
-                        subtitle: day.formatted(.dateTime.day().month(.abbreviated)),
-                        day: day,
-                        tasks: store.data.tasks(on: day).filter { !$0.isDone || cal.isDateInToday(day) },
-                        events: calendar.events(on: day).filter { !$0.isAllDay })
+        HStack(alignment: .top, spacing: 8) {
+            Column(title: "Inbox", subtitle: "\(store.data.inbox.count)", day: nil, tasks: store.data.inbox, events: [], highlight: false)
+                .frame(width: 170)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(days, id: \.self) { day in
+                        Column(
+                            title: cal.isDateInToday(day) ? "Today" : cal.isDateInTomorrow(day) ? "Tomorrow" : day.formatted(.dateTime.weekday(.wide)),
+                            subtitle: day.formatted(.dateTime.day().month(.abbreviated)),
+                            day: day,
+                            tasks: store.data.tasks(on: day),
+                            events: calendar.events(on: day).filter { !$0.isAllDay },
+                            highlight: cal.isDateInToday(day))
+                            .frame(width: 150)
+                    }
                 }
             }
         }
@@ -32,33 +37,46 @@ struct WeekView: View {
         let day: Date?
         let tasks: [TaskItem]
         let events: [CalEvent]
+        let highlight: Bool
         @State private var targeted = false
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(title).font(.system(size: 12, weight: .semibold))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title).nfont(12, .bold).foregroundStyle(highlight ? Tok.accent : Tok.ink(0.9))
                     Spacer()
-                    Text(subtitle).font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
+                    Text(subtitle).nfont(10, .medium).foregroundStyle(Tok.ink(0.4))
                 }
                 if day == nil {
-                    AddTaskField(placeholder: "Add…", defaultDay: nil)
+                    AddTaskField(placeholder: "Someday…", defaultDay: nil, showsMic: false)
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(events) { e in
-                            Text("\(e.start.formatted(date: .omitted, time: .shortened)) \(e.title)")
-                                .font(.system(size: 10)).lineLimit(1)
-                                .foregroundStyle(Color(nsColor: e.color))
+                            HStack(spacing: 4) {
+                                RoundedRectangle(cornerRadius: 1).fill(Color(nsColor: e.color)).frame(width: 2, height: 10)
+                                Text(e.start.formatted(date: .omitted, time: .shortened)).nfont(9, .semibold).foregroundStyle(Tok.ink(0.5))
+                                Text(e.title).nfont(10).lineLimit(1).foregroundStyle(Tok.ink(0.7))
+                            }
                         }
+                        if !events.isEmpty && !tasks.isEmpty { Divider().opacity(0.4).padding(.vertical, 2) }
                         ForEach(tasks) { TaskRow(task: $0, compact: true) }
+                        if tasks.isEmpty && events.isEmpty {
+                            Text(day == nil ? "Drop tasks here" : "Free").nfont(10).foregroundStyle(Tok.ink(0.25))
+                                .frame(maxWidth: .infinity).padding(.top, 14)
+                        }
                     }
                 }
+                .scrollIndicators(.never)
             }
-            .padding(8)
-            .frame(width: 150)
+            .padding(9)
             .frame(maxHeight: .infinity, alignment: .top)
-            .background(.white.opacity(targeted ? 0.14 : 0.06), in: RoundedRectangle(cornerRadius: 10))
+            .background(
+                RoundedRectangle(cornerRadius: Tok.radius, style: .continuous)
+                    .fill(targeted ? Tok.accent.opacity(0.16) : Tok.fill(highlight ? 0.09 : 0.05))
+                    .overlay(RoundedRectangle(cornerRadius: Tok.radius, style: .continuous)
+                        .strokeBorder(targeted ? Tok.accent.opacity(0.6) : .clear, lineWidth: 1)))
+            .animation(.easeOut(duration: 0.12), value: targeted)
             .dropDestination(for: String.self) { items, _ in
                 let ids = items.compactMap(UUID.init(uuidString:))
                 store.mutate { d in ids.forEach { d.move($0, to: day) } }

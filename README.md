@@ -12,27 +12,32 @@ Click the notch or press **⌥N**. Macs without a notch get one drawn at the top
 
 | Area | What it does |
 |---|---|
-| **Notch** | Opens on click, ⌥N, or (optionally) hover. Closes on Esc or a click outside. Follows the pointer between displays. Draws a notch on displays without one. Adjustable size. |
-| **Today** | Natural-language quick add: `call mom tomorrow at 5pm !` sets the day, a reminder at 17:00 and marks it important. URLs become attached links. Unfinished tasks carry forward to today. |
-| **Reminders** | When a task comes due the notch opens with a chime: **Snooze 10 min** or **Done**. Alerts queue. Pause all reminders for an hour from the menu bar. |
-| **Plan your day / Wrap up** | Plan fits today's untimed tasks into free time around calendar events, important first, and sets reminders. Wrap up moves leftovers to tomorrow or the Inbox. Offered once a day (can be turned off). |
-| **Week** | Inbox plus the next 7 days. Drag tasks between columns. |
-| **Notes** | A daily notepad that autosaves. **⌘↩** turns the current line into a task. |
-| **Focus** | Countdown or stopwatch, pause/resume, +5 min. Pauses while the Mac sleeps. Procedural brown/pink/white/ocean noise. Runs your own Shortcuts on start/end (e.g. Do Not Disturb). A live timer shows beside the closed notch. |
-| **Calendar** | Read-only next two weeks from Apple Calendar (including Google/Outlook accounts added in System Settings). One-click **Join** for Zoom/Meet/Teams/Webex links; the notch pops open when a meeting starts. |
-| **Clips** | Recent copies, new screenshots and screen recordings. Click to copy, drag into any app, or make a task. Items that password managers mark as concealed are skipped. |
-| **Insights** | Done today/week, active focus minutes, streak, best focus hour. |
-| **AI agents (MCP)** | A bundled local MCP server (`notchling-mcp`) lets Claude Code, Claude Desktop or Cursor list/add/complete tasks, read/append notes and read insights. |
-| **URL scheme** | `notchling://open/<tab>`, `notchling://close`, `notchling://add?text=…`, `notchling://focus?minutes=25` for Raycast, Alfred, Shortcuts. |
+| **Notch** | Opens on click, ⌥N, or hover. Grows slightly under the pointer with a haptic tick. Esc or a click outside closes it. Follows the pointer between displays or pins to one (Settings › Show on). Draws a notch on monitors without one and steps aside for full-screen apps. Dark or light look, adjustable width, height and text size. Optional window mode. |
+| **Live activities** | Due reminders, meetings, "time to leave", finished timers and focus nudges open a compact notch with a chime and one-click actions. Click it to expand. Alerts queue. |
+| **Today** | Natural-language quick add with a live preview: `call mom tomorrow at 5pm !` sets the day, a 17:00 reminder and the important star. Add by voice (on-device speech). Smart / time / title / newest sort. Double-click to rename. Drop files or links on a task to attach them. Unfinished tasks carry forward. |
+| **Plan your day / Wrap up** | Plan fits today's untimed tasks into free time around your events, important first, and gives each a reminder. Wrap up moves leftovers to tomorrow or the Inbox. Offered once a day. |
+| **Week** | Inbox plus the next 7 days with your events. Drag tasks between days. |
+| **Notes** | Daily notepad with day navigation. Autosaves. **⌘↩** turns the current line into a task. |
+| **Focus** | Countdown or stopwatch, pause/resume, +5 min. Pauses while the Mac sleeps. Brown, pink, white, rain and ocean sounds (generated, no audio files). Runs your Shortcuts on start/end. Nudges you back from apps you pick. A live ring and timer sit beside the closed notch. |
+| **Calendar** | Read-only Apple Calendar (incl. Google/Outlook accounts), ICS/webcal links, Calendly and Cal.com bookings (keys in Keychain). One-click Join for Zoom/Meet/Teams/Webex. "Time to leave" alerts with Apple Maps travel time. Private camera preview to check yourself before a call. |
+| **Apple Reminders** | Optional two-way sync with a "Notchling" list, so tasks reach iPhone and Apple Watch. Newer edit wins; deletes sync both ways. |
+| **Clips** | Recent copies, screenshots and screen recordings. Click to copy, drag anywhere, turn into a task. Password-manager items are skipped. |
+| **Insights** | Done today, streak, focus today/this week, best focus hour, 7-day chart. Only active focus time counts. |
+| **Around the Mac** | Menu bar menu (focus controls, today's tasks, pause reminders for 1 hour). Open tasks searchable in Spotlight. `notchling://` URL scheme for Raycast, Alfred and Shortcuts. Launch at login. |
+| **AI agents (MCP)** | Bundled local MCP server for Claude Code, the Claude app and Cursor: list/add/complete/move/delete tasks, set reminders, read/append notes, insights, and start/pause/stop the focus timer. |
 
-All data lives in one JSON file on your Mac: `~/Library/Application Support/Notchling/data.json`. No account, no network.
+All data lives in one JSON file on your Mac: `~/Library/Application Support/Notchling/data.json`. No account. The network is used only for calendar links and booking services you add.
 
 ## Install
 
 Download the DMG from Releases, open it, drag **Notchling** to Applications.
 
-Builds from this repo are ad-hoc signed, so the first launch needs right-click → **Open** (or
-`xattr -dr com.apple.quarantine /Applications/Notchling.app`). Release builds signed with a Developer ID and notarized open normally.
+If you launch it straight from the disk image or Downloads, Notchling offers to move itself to Applications and relaunch.
+
+`scripts/build-dmg.sh` signs with a self-signed local identity it creates once in its own keychain
+(`~/Library/Keychains/notchling-signing.keychain-db`). The identity stays the same across rebuilds, so macOS
+remembers the permissions you granted. Other Macs will still need right-click → **Open** the first time.
+For public releases, sign with a Developer ID and notarize (below) so it opens normally everywhere.
 
 Requires macOS 14 or later. Apple silicon and Intel.
 
@@ -67,7 +72,8 @@ Claude Desktop / Cursor (`mcp.json`):
 { "mcpServers": { "notchling": { "command": "/Applications/Notchling.app/Contents/MacOS/notchling-mcp" } } }
 ```
 
-Tools: `list_tasks`, `add_task`, `complete_task`, `get_note`, `append_note`, `insights`. The app picks up changes within two seconds.
+Tools: `list_tasks`, `add_task`, `complete_task`, `set_reminder`, `move_task`, `delete_task`, `focus`, `get_note`, `append_note`, `insights`.
+The app picks up changes within two seconds. Settings › AI agents can open Terminal and connect Claude Code for you.
 
 ## Layout
 
@@ -81,8 +87,8 @@ scripts/                 DMG build and icon generator
 
 ## Roadmap
 
-Apple Reminders two-way sync, voice task entry (on-device speech), desktop widgets and App Intents, Spotlight indexing,
-travel-time "time to leave" alerts, distraction nudges, localization. PRs welcome.
+Desktop widgets (Today, Focus) and Siri / Shortcuts actions need an Xcode project with a widget extension and App Intents;
+they're next. Localization is also open. PRs welcome.
 
 ## License
 

@@ -9,6 +9,7 @@ struct CalEvent: Identifiable, Equatable {
     let end: Date
     let isAllDay: Bool
     let color: NSColor
+    var location: String? = nil
     let joinURL: URL?
 }
 
@@ -18,8 +19,11 @@ struct CalEvent: Identifiable, Equatable {
 final class CalendarService: ObservableObject {
     enum Access { case unknown, granted, denied }
 
+    /// Apple Calendar events merged with ICS links and booking services.
     @Published private(set) var events: [CalEvent] = []
     @Published private(set) var access: Access = .unknown
+    private var appleEvents: [CalEvent] = []
+    private var externalEvents: [CalEvent] = []
 
     private let store = EKEventStore()
     private var refreshTimer: Timer?
@@ -48,15 +52,26 @@ final class CalendarService: ObservableObject {
         }
     }
 
+    func setExternal(_ list: [CalEvent]) {
+        externalEvents = list
+        merge()
+    }
+
+    private func merge() {
+        let enabled = Prefs.d.bool(forKey: Prefs.calendarEnabled)
+        events = enabled ? (appleEvents + externalEvents).sorted { $0.start < $1.start } : []
+    }
+
     func refresh() {
+        defer { merge() }
         guard access == .granted, Prefs.d.bool(forKey: Prefs.calendarEnabled) else {
-            events = []
+            appleEvents = []
             return
         }
         let start = Calendar.current.startOfDay(for: Date())
         let end = Calendar.current.date(byAdding: .day, value: 14, to: start)!
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
-        events = store.events(matching: predicate)
+        appleEvents = store.events(matching: predicate)
             .filter { $0.status != .canceled }
             .sorted { $0.startDate < $1.startDate }
             .map { e in
@@ -65,6 +80,7 @@ final class CalendarService: ObservableObject {
                     title: e.title ?? "Untitled",
                     start: e.startDate, end: e.endDate, isAllDay: e.isAllDay,
                     color: e.calendar.color ?? .systemBlue,
+                    location: e.location,
                     joinURL: MeetingLink.find(in: [e.url?.absoluteString, e.location, e.notes]))
             }
     }

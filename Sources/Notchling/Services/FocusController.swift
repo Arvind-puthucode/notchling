@@ -3,7 +3,7 @@ import NotchlingCore
 
 @MainActor
 final class FocusController: ObservableObject {
-    @Published private(set) var clock = FocusClock()
+    @Published private(set) var clock = FocusClock() { didSet { publishState() } }
     @Published private(set) var now = Date()
     @Published var sound: NoisePlayer.Sound = .off {
         didSet { if clock.isRunning { noise.play(sound) } }
@@ -30,7 +30,22 @@ final class FocusController: ObservableObject {
     }
 
     var display: TimeInterval { clock.display(at: now) }
+    /// 0…1 through a countdown; a stopwatch fills once per hour.
+    var progress: Double {
+        let e = clock.elapsed(at: now)
+        return clock.mode == .countdown ? e / max(1, clock.target) : (e.truncatingRemainder(dividingBy: 3600)) / 3600
+    }
     var displayText: String { Self.format(display) }
+
+    /// Mirrors timer state into the app's defaults so the MCP server can report it.
+    private func publishState() {
+        let now = Date()
+        let state: [String: Any] = [
+            "active": clock.isActive, "running": clock.isRunning, "mode": clock.mode.rawValue,
+            "elapsed": clock.elapsed(at: now), "target": clock.target, "at": now.timeIntervalSince1970,
+        ]
+        Prefs.d.set(state, forKey: "focus.state")
+    }
 
     static func format(_ t: TimeInterval) -> String {
         let s = Int(t.rounded(.down))

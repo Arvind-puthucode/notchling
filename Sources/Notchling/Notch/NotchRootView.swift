@@ -29,46 +29,69 @@ struct NotchShape: Shape {
 struct NotchRootView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var focus: FocusController
-    @AppStorage(Prefs.width) private var width = 680.0
-    @AppStorage(Prefs.height) private var height = 360.0
+    @AppStorage(Prefs.width) private var width = 700.0
+    @AppStorage(Prefs.height) private var height = 380.0
     @AppStorage(Prefs.fakeNotch) private var fakeNotch = true
+    @AppStorage(Prefs.appearance) private var appearance = "dark"
+    @AppStorage(Prefs.textScale) private var textScale = 1.0
 
+    private var light: Bool { appearance == "light" }
     private var showsPill: Bool { focus.clock.isActive && !model.isOpen }
 
     private var size: CGSize {
-        if model.isOpen { return CGSize(width: width, height: height) }
+        if model.isOpen { return model.openSize }
         let extra = showsPill ? NotchWindowController.sidePill : 0
-        return CGSize(width: model.notchSize.width + 2 * extra, height: model.notchSize.height)
+        let hover: CGFloat = model.hoveringClosedNotch ? 10 : 0
+        return CGSize(width: model.notchSize.width + 2 * extra + hover * 2, height: model.notchSize.height + hover / 3)
     }
 
+    /// The drawn notch steps aside on plain displays when turned off or when a full-screen app hides the menu bar.
     private var hidden: Bool {
-        !model.isOpen && !showsPill && !model.screenHasHardwareNotch && !fakeNotch
+        guard !model.isOpen, !model.screenHasHardwareNotch else { return false }
+        return !fakeNotch || model.menuBarHidden
     }
 
     var body: some View {
         let open = model.isOpen
-        let top: CGFloat = open ? 14 : 6
+        let compact = model.isCompact
+        let top: CGFloat = open ? 12 : 6
+        // Light look tints the open surface; the closed notch is always black like the hardware.
+        let fill = open && !compact ? NotchBackground.color(light: light) : .black
         ZStack(alignment: .top) {
-            NotchShape(topRadius: top, bottomRadius: open ? 24 : 10)
-                .fill(Color.black)
-                .shadow(color: .black.opacity(open ? 0.45 : 0), radius: 14, y: 6)
-            if open {
-                ExpandedView()
-                    .padding(.horizontal, top + 6)
-                    .padding(.bottom, 12)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
-            } else if showsPill {
-                ClosedPill(notchWidth: model.notchSize.width)
-                    .padding(.horizontal, top + 4)
-                    .transition(.opacity)
+            NotchShape(topRadius: top, bottomRadius: open ? (compact ? 28 : 26) : 10)
+                .fill(fill)
+                .shadow(color: .black.opacity(open ? 0.5 : 0), radius: 18, y: 8)
+            Group {
+                if compact, let alert = model.currentAlert {
+                    AlertCard(alert: alert, compact: true)
+                        .environment(\.colorScheme, .dark)
+                        .padding(.top, model.notchSize.height + 2)
+                        .padding(.horizontal, top + 14)
+                        .contentShape(Rectangle())
+                        .onTapGesture { withAnimation(Tok.spring) { model.expandFromAlert() } }
+                } else if open {
+                    ExpandedView(inNotch: true)
+                        .environment(\.colorScheme, light ? .light : .dark)
+                        .padding(.horizontal, top + 8)
+                        .padding(.bottom, 14)
+                } else if showsPill {
+                    ClosedPill(notchWidth: model.notchSize.width)
+                        .padding(.horizontal, top + 6)
+                }
             }
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.92, anchor: .top)).animation(Tok.spring.delay(0.05)),
+                removal: .opacity.animation(.easeOut(duration: 0.1))))
         }
         .frame(width: size.width, height: size.height)
+        .clipShape(NotchShape(topRadius: top, bottomRadius: open ? 26 : 10))
         .opacity(hidden ? 0 : 1)
-        .environment(\.colorScheme, .dark)
+        .environment(\.textScale, textScale)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .animation(.spring(response: 0.36, dampingFraction: 0.82), value: open)
-        .animation(.spring(response: 0.36, dampingFraction: 0.82), value: showsPill)
+        .animation(Tok.spring, value: open)
+        .animation(Tok.spring, value: compact)
+        .animation(Tok.spring, value: showsPill)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: model.hoveringClosedNotch)
     }
 }
 
@@ -79,57 +102,38 @@ private struct ClosedPill: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Image(systemName: focus.clock.isRunning ? "timer" : "pause.fill")
-                .foregroundStyle(.orange)
+            Ring(progress: focus.progress, lineWidth: 2.5, tint: Tok.accent)
+                .frame(width: 14, height: 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Spacer().frame(width: notchWidth - 20)
+            Spacer().frame(width: notchWidth - 24)
             Text(focus.displayText)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(.white)
+                .foregroundStyle(focus.clock.isRunning ? .white : .white.opacity(0.5))
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .font(.system(size: 12, weight: .semibold))
         .frame(maxHeight: .infinity)
+        .environment(\.colorScheme, .dark)
     }
 }
 
-/// Open workspace: tabs in the left "ear", date and settings in the right one, content below.
+/// The workspace: tabs and status around the notch, content below. Also used by window mode.
 struct ExpandedView: View {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var focus: FocusController
+    var inNotch: Bool
+    @Namespace private var tabNS
 
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 0) {
-                HStack(spacing: 2) {
-                    ForEach(NotchTab.allCases) { tab in
-                        Button { model.tab = tab } label: {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 12, weight: .medium))
-                                .frame(width: 26, height: 22)
-                                .background(model.tab == tab ? Color.white.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 6))
-                                .foregroundStyle(model.tab == tab ? .white : .white.opacity(0.55))
-                        }
-                        .buttonStyle(.plain)
-                        .help(tab.title)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Spacer().frame(width: model.notchSize.width)
-                HStack(spacing: 10) {
-                    Text(Date.now, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.7))
-                    Button { SettingsWindow.show(model: model) } label: {
-                        Image(systemName: "gearshape").foregroundStyle(.white.opacity(0.7))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Settings")
-                }
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                tabBar.frame(maxWidth: .infinity, alignment: .leading)
+                if inNotch { Spacer().frame(width: model.notchSize.width + 8) }
+                status.frame(maxWidth: inNotch ? .infinity : nil, alignment: .trailing)
             }
-            .frame(height: max(model.notchSize.height, 24))
+            .frame(height: inNotch ? max(model.notchSize.height, 26) : 30)
 
-            ZStack {
+            ZStack(alignment: .top) {
                 Group {
                     switch model.tab {
                     case .today: TodayView()
@@ -142,13 +146,92 @@ struct ExpandedView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                if let alert = model.currentAlert {
+                .id(model.tab)
+                .transition(.opacity.animation(.easeOut(duration: 0.12)))
+
+                if let alert = model.currentAlert, !model.isCompact {
                     AlertCard(alert: alert)
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
-            .animation(.easeOut(duration: 0.2), value: model.currentAlert)
+            .animation(Tok.spring, value: model.currentAlert)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(Tok.ink(0.95))
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            ForEach(NotchTab.allCases) { tab in
+                TabButton(tab: tab, selected: model.tab == tab, ns: tabNS) {
+                    withAnimation(Tok.spring) { model.tab = tab }
+                }
+            }
+        }
+    }
+
+    private var status: some View {
+        HStack(spacing: 8) {
+            if focus.clock.isActive && model.tab != .focus {
+                Button { model.tab = .focus } label: {
+                    HStack(spacing: 4) {
+                        Ring(progress: focus.progress, lineWidth: 2, tint: Tok.accent).frame(width: 11, height: 11)
+                        Text(focus.displayText).nfont(11, .semibold, design: .rounded).monospacedDigit()
+                    }
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(Tok.accent.opacity(0.15), in: Capsule())
+                    .foregroundStyle(Tok.accent)
+                }
+                .buttonStyle(.plain)
+            }
+            TimelineView(.everyMinute) { ctx in
+                Text(ctx.date, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
+                    .nfont(12, .semibold)
+                    .foregroundStyle(Tok.ink(0.6))
+            }
+            Menu {
+                Button("Settings…") { SettingsWindow.show(model: model) }
+                if inNotch {
+                    Button("Open as Window") { model.close(); model.showWindow?() }
+                }
+                if let until = model.remindersPausedUntil {
+                    Button("Resume Reminders (paused until \(until.formatted(date: .omitted, time: .shortened)))") { model.remindersPausedUntil = nil }
+                } else {
+                    Button("Pause Reminders for 1 Hour") { model.remindersPausedUntil = Date().addingTimeInterval(3600) }
+                }
+                Divider()
+                Button("Quit Notchling") { NSApp.terminate(nil) }
+            } label: {
+                Image(systemName: "ellipsis.circle").nfont(13, .medium).foregroundStyle(Tok.ink(0.6))
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        }
+    }
+}
+
+private struct TabButton: View {
+    let tab: NotchTab
+    let selected: Bool
+    let ns: Namespace.ID
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: tab.icon).nfont(12, .semibold)
+            .frame(width: 30)
+            .frame(height: 24)
+            .foregroundStyle(selected ? Tok.ink(1) : Tok.ink(hovering ? 0.8 : 0.5))
+            .background {
+                if selected {
+                    Capsule().fill(Tok.fill(0.14)).matchedGeometryEffect(id: "tab", in: ns)
+                } else if hovering {
+                    Capsule().fill(Tok.fill(0.06))
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(tab.title)
     }
 }

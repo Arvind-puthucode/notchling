@@ -13,11 +13,15 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     public var createdAt: Date
     /// Set once the due-time alert fired, so it never fires twice.
     public var reminded: Bool
+    /// Last local edit. Drives conflict resolution with Apple Reminders.
+    public var modifiedAt: Date?
+    /// `calendarItemIdentifier` of the linked Apple Reminder, when sync is on.
+    public var reminderID: String?
 
     public init(
         id: UUID = UUID(), title: String, day: Date? = nil, due: Date? = nil,
         important: Bool = false, links: [String] = [], completedAt: Date? = nil,
-        createdAt: Date = Date(), reminded: Bool = false
+        createdAt: Date = Date(), reminded: Bool = false, modifiedAt: Date? = nil, reminderID: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -28,6 +32,8 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
         self.completedAt = completedAt
         self.createdAt = createdAt
         self.reminded = reminded
+        self.modifiedAt = modifiedAt ?? createdAt
+        self.reminderID = reminderID
     }
 
     public var isDone: Bool { completedAt != nil }
@@ -50,6 +56,8 @@ public struct PlannerData: Codable, Equatable, Sendable {
     /// Daily notes keyed by `DayKey` (yyyy-MM-dd).
     public var notes: [String: String] = [:]
     public var sessions: [FocusSession] = []
+    /// Linked reminders whose task was deleted here; sync deletes them remotely, then clears this.
+    public var deletedReminderIDs: [String]?
 
     public init() {}
 }

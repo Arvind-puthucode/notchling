@@ -43,12 +43,13 @@ public enum DayPlanner {
 }
 
 extension PlannerData {
-    public mutating func applyPlan(_ plan: [(UUID, Date)], calendar: Calendar = .current) {
+    public mutating func applyPlan(_ plan: [(UUID, Date)], calendar: Calendar = .current, now: Date = Date()) {
         for (id, start) in plan {
             guard let i = tasks.firstIndex(where: { $0.id == id }) else { continue }
             tasks[i].due = start
             tasks[i].day = calendar.startOfDay(for: start)
             tasks[i].reminded = false
+            tasks[i].modifiedAt = now
         }
     }
 }
