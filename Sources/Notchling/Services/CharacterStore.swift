@@ -12,18 +12,27 @@ struct CharacterPack: Identifiable, Equatable {
         var accent: String?
         /// "paper" draws a cream card behind line art; "none" for transparent stickers.
         var frame: String?
-        var images: [String: String]
+        /// Mood -> one file name or a list of them (the avatar rotates through a list).
+        var images: [String: ImageList]
         var lines: [String: [String]]
     }
 
-    enum Mood: String { case idle, happy, alert }
-    enum Event: String { case greeting, empty, allDone, done, reminder, focusStart, focusDone }
+    struct ImageList: Decodable {
+        var files: [String]
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if let list = try? c.decode([String].self) { files = list } else { files = [try c.decode(String.self)] }
+        }
+    }
+
+    enum Mood: String { case idle, happy, alert, focus }
+    enum Event: String { case greeting, empty, allDone, done, reminder, focusStart, focusDone, focusing }
 
     let id: String
     let manifest: Manifest
     let folder: URL
     let builtIn: Bool
-    private let images: [String: NSImage]
+    private let images: [String: [NSImage]]
 
     init?(folder: URL, builtIn: Bool) {
         guard let data = try? Data(contentsOf: folder.appendingPathComponent("theme.json")),
@@ -32,9 +41,10 @@ struct CharacterPack: Identifiable, Equatable {
         manifest = m
         self.folder = folder
         self.builtIn = builtIn
-        var loaded: [String: NSImage] = [:]
-        for (mood, file) in m.images {
-            if let img = NSImage(contentsOf: folder.appendingPathComponent(file)) { loaded[mood] = img }
+        var loaded: [String: [NSImage]] = [:]
+        for (mood, list) in m.images {
+            let imgs = list.files.compactMap { NSImage(contentsOf: folder.appendingPathComponent($0)) }
+            if !imgs.isEmpty { loaded[mood] = imgs }
         }
         images = loaded
         guard !images.isEmpty else { return nil }
@@ -44,9 +54,14 @@ struct CharacterPack: Identifiable, Equatable {
     var paperFrame: Bool { manifest.frame == "paper" }
     var accent: Color { manifest.accent.flatMap(Color.init(hex:)) ?? Tok.accent }
 
-    func image(_ mood: Mood) -> NSImage {
-        images[mood.rawValue] ?? images["idle"] ?? images.values.first!
+    /// One image for the mood; `seed` picks among several so the character changes poses.
+    func image(_ mood: Mood, seed: Int = 0) -> NSImage {
+        let list = images[mood.rawValue] ?? images["idle"] ?? images.values.first!
+        return list[(seed & Int(Int32.max)) % list.count]
     }
+
+    /// Changes every 20 minutes, so the idle pose rotates through the day without flickering.
+    static var poseSeed: Int { Int(Date().timeIntervalSince1970 / 1200) }
 
     /// A line for an event with {open}, {done}, {total} filled in. `seed` keeps it stable between redraws.
     func line(_ event: Event, open: Int = 0, done: Int = 0, seed: Int = 0) -> String? {
@@ -129,9 +144,10 @@ struct CharacterAvatar: View {
     let pack: CharacterPack
     var mood: CharacterPack.Mood = .idle
     var size: CGFloat = 52
+    var seed: Int = CharacterPack.poseSeed
 
     var body: some View {
-        let img = Image(nsImage: pack.image(mood)).resizable().interpolation(.high)
+        let img = Image(nsImage: pack.image(mood, seed: seed)).resizable().interpolation(.high)
         Group {
             if pack.paperFrame {
                 img.scaledToFill()
@@ -143,7 +159,7 @@ struct CharacterAvatar: View {
                 img.scaledToFit().frame(width: size * 1.15, height: size * 1.15)
             }
         }
-        .id(mood) // swap images with a little pop
+        .id("\(mood.rawValue)-\(seed)") // swap images with a little pop
         .transition(.scale(scale: 0.8).combined(with: .opacity))
     }
 }
@@ -153,19 +169,22 @@ struct CharacterCard: View {
     @EnvironmentObject var characters: CharacterStore
     let open: Int
     let done: Int
+    var focusing = false
 
     var body: some View {
         if let pack = characters.current {
             let reaction = characters.reaction
-            let seed = Calendar.current.component(.hour, from: Date()) + open
+            let seed = CharacterPack.poseSeed + open
             let line: String = {
                 if let r = reaction { return pack.line(r.event, open: open, done: done, seed: r.seed) ?? "" }
+                if focusing, let l = pack.line(.focusing, seed: seed) { return l }
                 if open + done == 0 { return pack.line(.empty, seed: seed) ?? "" }
                 if open == 0 { return pack.line(.allDone, open: open, done: done, seed: seed) ?? "" }
                 return pack.line(.greeting, open: open, done: done, seed: seed) ?? ""
             }()
             HStack(alignment: .center, spacing: 8) {
-                CharacterAvatar(pack: pack, mood: reaction?.mood ?? (open == 0 && done > 0 ? .happy : .idle), size: 50)
+                CharacterAvatar(pack: pack, mood: reaction?.mood ?? (focusing ? .focus : open == 0 && done > 0 ? .happy : .idle),
+                                size: 50, seed: reaction?.seed ?? CharacterPack.poseSeed)
                 Text(line)
                     .nfont(12, .semibold)
                     .lineLimit(3)

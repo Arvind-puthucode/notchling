@@ -39,8 +39,9 @@ All data lives in one JSON file on your Mac: `~/Library/Application Support/Notc
 A character can live in your notch: it greets you on Today, cheers when you finish tasks, and delivers reminders in its own voice.
 Pick one in **Settings › Appearance › Character**. Built in:
 
-- **Fox Ninja**, the original Notchling mascot.
-- **Popeye (1929)**, with art from E. C. Segar's first *Thimble Theatre* strip (Jan 17, 1929), which is public domain in the US. Castor Oyl yells your reminders. Not affiliated with King Features.
+- **Popeye (1929)**: eight poses cut from E. C. Segar's 1929 *Thimble Theatre* strips (Jan 17, Feb 14, Oct 16, Nov 13),
+  which are public domain in the US. He rotates poses through the day, flexes for reminders, sits steady during focus,
+  and puts his hands on his hips when you finish things. Not affiliated with King Features.
 
 **Make your own** in `~/Library/Application Support/Notchling/Characters/<name>/` (Settings has a button that opens it):
 
@@ -62,7 +63,8 @@ Pick one in **Settings › Appearance › Character**. Built in:
 }
 ```
 
-Only `idle` is required; missing moods fall back to it. Use `"frame": "paper"` for black line art so it reads on the dark notch.
+Moods are `idle`, `happy`, `alert` and `focus`; each takes one file or a list to rotate through. Only `idle` is required;
+missing moods fall back to it. A `focusing` line list is shown while a focus session runs. Use `"frame": "paper"` for black line art so it reads on the dark notch.
 `{open}`, `{done}` and `{total}` are filled in. Packs in this folder stay on your Mac.
 Please don't open pull requests with characters you don't have the rights to share; the built-in set is limited to public-domain and original art.
 

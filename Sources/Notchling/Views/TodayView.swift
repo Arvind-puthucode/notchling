@@ -73,7 +73,7 @@ private struct SidePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             let today = store.data.tasks(on: Date())
-            CharacterCard(open: today.filter { !$0.isDone }.count, done: today.filter(\.isDone).count)
+            CharacterCard(open: today.filter { !$0.isDone }.count, done: today.filter(\.isDone).count, focusing: focus.clock.isRunning)
             SectionLabel("Up next")
             let events = Array(calendar.upcomingToday.filter { !$0.isAllDay }.prefix(3))
             if calendar.access == .unknown && calendar.events.isEmpty {
