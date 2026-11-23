@@ -1,0 +1,16 @@
+{
+  "name": "Fox Ninja",
+  "credit": "Original Notchling mascot.",
+  "accent": "#FF9E42",
+  "frame": "none",
+  "images": { "idle": "fox.png" },
+  "lines": {
+    "greeting": ["Mission board: {open} left. Let's go!", "{open} missions today. Swift and silent.", "Ninja way: finish {open} more."],
+    "empty": ["No missions. Train freely.", "The board is clear. Suspicious…"],
+    "allDone": ["All {done} missions cleared!", "Flawless. Ramen time."],
+    "done": ["Mission complete!", "Swift as a shuriken!", "Too easy.", "Another one down!"],
+    "reminder": ["HEADS UP, NINJA!", "MISSION TIME!", "MOVE, MOVE, MOVE!"],
+    "focusStart": ["Silent mode: on.", "Deep training begins."],
+    "focusDone": ["TRAINING COMPLETE!", "LEVEL UP!"]
+  }
+}

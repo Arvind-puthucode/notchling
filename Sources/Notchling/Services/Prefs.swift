@@ -36,7 +36,7 @@ enum Prefs {
             dayPrompts: true, workdayEndHour: 18, taskSort: "smart", remindersSync: false,
             focusStartShortcut: "", focusEndShortcut: "", distractionApps: "",
             clipsEnabled: true, clipsScreenshots: true, calendarEnabled: true, icsLinks: "",
-            travelAlerts: false, spotlight: true,
+            travelAlerts: false, spotlight: true, "look.character": "builtin:fox",
         ])
     }
 

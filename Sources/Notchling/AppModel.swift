@@ -64,6 +64,7 @@ final class AppModel: ObservableObject {
     let external = ExternalCalendars()
     let travel = TravelTimeService()
     let spotlight = SpotlightIndexer()
+    let characters = CharacterStore()
     lazy var reminders = RemindersSyncService(planner: store)
 
     /// Set by the window controller; opens the workspace as a regular window.
@@ -93,6 +94,10 @@ final class AppModel: ObservableObject {
             }.store(in: &bag)
         spotlight.update(store.data)
         _ = reminders
+
+        focus.$clock.map(\.isActive).removeDuplicates().dropFirst()
+            .sink { [weak self] active in if active { self?.characters.react(.focusStart, mood: .idle) } }
+            .store(in: &bag)
 
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)
             .compactMap { $0.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication }

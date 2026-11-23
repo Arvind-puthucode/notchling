@@ -28,6 +28,7 @@ BIN="$(swift build -c release "${arch_flags[@]}" --show-bin-path)"
 
 cp "$BIN/Notchling" "$APP/Contents/MacOS/Notchling"
 cp "$BIN/notchling-mcp" "$APP/Contents/MacOS/notchling-mcp"
+cp -R Resources/Characters "$APP/Contents/Resources/Characters"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD/" Resources/Info.plist > "$APP/Contents/Info.plist"
 
 echo "==> Icon"

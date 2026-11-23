@@ -1,0 +1,16 @@
+{
+  "name": "Popeye (1929)",
+  "credit": "Art from E. C. Segar's Thimble Theatre, January 17, 1929 (Popeye's first strip). Public domain in the US. Not affiliated with King Features.",
+  "accent": "#5BB854",
+  "frame": "paper",
+  "images": { "idle": "idle.png", "happy": "happy.png", "alert": "alert.png" },
+  "lines": {
+    "greeting": ["Ahoy! {open} chores on deck today.", "{open} jobs left. Snap into it!", "Batten down the hatches: {open} to go."],
+    "empty": ["Calm seas. Nothing on deck.", "No orders yet. Suits me fine."],
+    "allDone": ["Ship's shipshape! All {done} done.", "Every chore swabbed clean!"],
+    "done": ["Aye, that's done!", "Scrubbed and stowed!", "One less barnacle!", "Smooth sailing!"],
+    "reminder": ["SNAP INTO IT, SAILOR!", "ALL HANDS ON DECK!", "YOU'RE THE WHOLE CREW!"],
+    "focusStart": ["Steady at the helm.", "Full speed ahead!"],
+    "focusDone": ["LAND HO! SESSION DONE", "ANCHORS AWEIGH, NICE WORK"]
+  }
+}

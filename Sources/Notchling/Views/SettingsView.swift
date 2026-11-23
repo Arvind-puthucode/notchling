@@ -94,6 +94,7 @@ private struct GeneralSettings: View {
 }
 
 private struct AppearanceSettings: View {
+    @EnvironmentObject var characters: CharacterStore
     @AppStorage(Prefs.appearance) private var appearance = "dark"
     @AppStorage(Prefs.width) private var width = 700.0
     @AppStorage(Prefs.height) private var height = 380.0
@@ -107,6 +108,27 @@ private struct AppearanceSettings: View {
                     Text("Light").tag("light")
                 }
                 .pickerStyle(.segmented)
+            }
+            Section("Character") {
+                Picker("Lives in your notch", selection: Binding(get: { characters.current?.id ?? "" }, set: { characters.select($0) })) {
+                    Text("None").tag("")
+                    ForEach(characters.packs) { p in
+                        Text(p.builtIn ? p.name : "\(p.name) (yours)").tag(p.id)
+                    }
+                }
+                if let p = characters.current {
+                    HStack(spacing: 12) {
+                        CharacterAvatar(pack: p, size: 44)
+                        Text(p.line(.greeting, open: 3, done: 2) ?? "").font(.callout)
+                    }
+                    if let credit = p.manifest.credit { Text(credit).font(.caption).foregroundStyle(.secondary) }
+                }
+                HStack {
+                    Button("Open My Characters Folder") { characters.openUserFolder() }
+                    Button("Reload") { characters.reload() }
+                }
+                Text("Make your own: a folder with theme.json plus images (see README › Character packs). Your packs stay on this Mac.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Size") {
                 LabeledContent("Width") {

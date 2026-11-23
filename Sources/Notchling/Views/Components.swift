@@ -17,7 +17,10 @@ struct TaskRow: View {
         HStack(spacing: 9) {
             Checkbox(done: task.isDone) {
                 store.mutate { $0.toggleDone(task.id) }
-                if !task.isDone { model.haptic() }
+                if !task.isDone {
+                    model.haptic()
+                    model.characters.react(.done)
+                }
             }
 
             VStack(alignment: .leading, spacing: 3) {

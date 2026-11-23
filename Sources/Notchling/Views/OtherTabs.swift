@@ -281,6 +281,7 @@ struct InsightsView: View {
 /// Live activity: shown as a compact notch when it popped open by itself, or over the workspace.
 struct AlertCard: View {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var characters: CharacterStore
     @EnvironmentObject var store: PlannerStore
     @EnvironmentObject var focus: FocusController
     let alert: NotchAlert
@@ -288,13 +289,17 @@ struct AlertCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(style.tint.opacity(0.18))
-                Image(systemName: style.icon).nfont(16, .semibold).foregroundStyle(style.tint)
+            if let pack = characters.current {
+                CharacterAvatar(pack: pack, mood: characterMood, size: compact ? 44 : 50)
+            } else {
+                ZStack {
+                    Circle().fill(style.tint.opacity(0.18))
+                    Image(systemName: style.icon).nfont(16, .semibold).foregroundStyle(style.tint)
+                }
+                .frame(width: 38, height: 38)
             }
-            .frame(width: 38, height: 38)
             VStack(alignment: .leading, spacing: 2) {
-                Text(style.title).nfont(11, .bold).foregroundStyle(style.tint)
+                Text(characterTitle ?? style.title).nfont(11, .bold).foregroundStyle(characters.current?.accent ?? style.tint)
                 Text(style.subtitle).nfont(14, .semibold).lineLimit(2)
                 if model.alerts.count > 1 {
                     Text("+\(model.alerts.count - 1) more").nfont(10, .medium).foregroundStyle(Tok.ink(0.45))
@@ -314,6 +319,25 @@ struct AlertCard: View {
         }
         .frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity, alignment: compact ? .center : .top)
         .padding(.top, compact ? 0 : 6)
+    }
+
+    /// The character's own words for reminders and finished sessions, stable per alert.
+    private var characterTitle: String? {
+        guard let pack = characters.current else { return nil }
+        let seed = alert.id.hashValue & Int(Int32.max)
+        switch alert {
+        case .reminder: return pack.line(.reminder, seed: seed)
+        case .focusDone: return pack.line(.focusDone, seed: seed)
+        default: return nil
+        }
+    }
+
+    private var characterMood: CharacterPack.Mood {
+        switch alert {
+        case .focusDone, .wrapUp: return .happy
+        case .reminder, .meeting, .leave, .distraction: return .alert
+        case .planDay: return .idle
+        }
     }
 
     private var style: (icon: String, tint: Color, title: String, subtitle: String) {

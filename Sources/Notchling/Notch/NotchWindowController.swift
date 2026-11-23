@@ -293,5 +293,6 @@ extension View {
             .environmentObject(model.speech)
             .environmentObject(model.external)
             .environmentObject(model.reminders)
+            .environmentObject(model.characters)
     }
 }

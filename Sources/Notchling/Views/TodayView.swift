@@ -66,11 +66,14 @@ struct TodayView: View {
 /// Right column on Today: next event and focus.
 private struct SidePanel: View {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var store: PlannerStore
     @EnvironmentObject var calendar: CalendarService
     @EnvironmentObject var focus: FocusController
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            let today = store.data.tasks(on: Date())
+            CharacterCard(open: today.filter { !$0.isDone }.count, done: today.filter(\.isDone).count)
             SectionLabel("Up next")
             let events = Array(calendar.upcomingToday.filter { !$0.isAllDay }.prefix(3))
             if calendar.access == .unknown && calendar.events.isEmpty {
